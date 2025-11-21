@@ -1,0 +1,69 @@
+{
+	"jobConfig": {
+		"name": "Transformation-and-DQChecks",
+		"description": "",
+		"role": "arn:aws:iam::334935311708:role/iam-glue-etl",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 10,
+		"maxCapacity": 10,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "Transformation-and-DQChecks.py",
+		"scriptLocation": "s3://aws-glue-assets-334935311708-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": false,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--curated_path",
+				"value": "s3://forex-processed/transaction/curated/",
+				"existing": false
+			},
+			{
+				"key": "--customer_path",
+				"value": "s3://forex-processed/customer/curated/",
+				"existing": false
+			},
+			{
+				"key": "--error_path",
+				"value": "s3://forex-error/error/",
+				"existing": false
+			},
+			{
+				"key": "--output_path",
+				"value": "s3://forex-processed/transaction/",
+				"existing": false
+			},
+			{
+				"key": "--rate_path",
+				"value": "s3://forex-processed/currency_conversion_rates_eur_usd_processed.csv",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2025-11-19T07:38:31.457Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-334935311708-us-east-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"pythonPath": "s3://forex-processed/libs/etl-forex.zip",
+		"bookmark": "job-bookmark-enable",
+		"sparkPath": "s3://aws-glue-assets-334935311708-us-east-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom datetime import datetime\r\nfrom pyspark.sql import SparkSession\r\nfrom awsglue.context import GlueContext\r\n\r\nfrom schemas.customer_schema import customer_schema\r\nfrom schemas.rate_schema import rate_schema\r\nfrom dq.dq_checks import apply_dq_checks\r\nfrom dq.transformations import join_customers_rates, split_valid_invalid, select_final_columns\r\nfrom awsglue.utils import getResolvedOptions\r\n\r\n# --- INIT ---\r\nspark = SparkSession.builder.appName(\"ForexDQJob\").getOrCreate()\r\nglueContext = GlueContext(spark.sparkContext)\r\n\r\n# Define the parameters you expect\r\nargs = getResolvedOptions(sys.argv, [\r\n    'customer_path',\r\n    'rate_path',\r\n    'output_path',\r\n    'curated_path',\r\n    'error_path'\r\n])\r\n\r\ncustomer_path = args['customer_path']\r\nrate_path     = args['rate_path']\r\noutput_path   = args['output_path']\r\ncurated_path  = args['curated_path']\r\nerror_path    = args['error_path']\r\n\r\n# --- LOAD DATA ---\r\ncustomers_df = spark.read.option(\"header\", True).schema(customer_schema).csv(customer_path)\r\nrates_df     = spark.read.option(\"header\", True).schema(rate_schema).csv(rate_path)\r\n\r\n# --- TRANSFORM ---\r\njoined_df = join_customers_rates(customers_df, rates_df)\r\ndq_df = apply_dq_checks(joined_df)\r\nvalid_df, invalid_df = split_valid_invalid(dq_df)\r\n\r\n# --- WRITE INVALID ---\r\ntoday_str = datetime.today().strftime(\"%Y-%m-%d\")\r\nerror_path = f\"{error_path}{today_str}/\"\r\ninvalid_df.write.mode(\"overwrite\").option(\"header\", True).csv(error_path)\r\n\r\n# --- WRITE CLEANED ---\r\nclean_df = select_final_columns(valid_df)\r\nclean_df.write.mode(\"overwrite\").parquet(output_path)\r\nclean_df.write.mode(\"overwrite\").option(\"header\", True).csv(curated_path)\r\n\r\n# --- DQ SCORE ---\r\ntotal_records = dq_df.count()\r\nvalid_records = valid_df.count()\r\ndq_score = (valid_records / total_records) * 100 if total_records > 0 else 0\r\nprint(f\"Data Quality Score: {dq_score:.2f}%\")\r\n\r\nspark.stop()\r\n"
+}

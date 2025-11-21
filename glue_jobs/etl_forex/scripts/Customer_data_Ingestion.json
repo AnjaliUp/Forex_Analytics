@@ -1,0 +1,63 @@
+{
+	"jobConfig": {
+		"name": "CustomerData-ingestion",
+		"description": "",
+		"role": "arn:aws:iam::334935311708:role/iam-glue-etl",
+		"command": "glueetl",
+		"version": "5.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 10,
+		"maxCapacity": 10,
+		"jobRunQueuingEnabled": false,
+		"maxRetries": 0,
+		"timeout": 480,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "CustomerData-ingestion.py",
+		"scriptLocation": "s3://aws-glue-assets-334935311708-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--CURATED_SALES_PATH",
+				"value": "s3://forex-processed/customer/curated/",
+				"existing": false
+			},
+			{
+				"key": "--PROCESSED_SALES_PATH",
+				"value": "s3://forex-processed/customer/",
+				"existing": false
+			},
+			{
+				"key": "--RAW_SALES_PATH",
+				"value": "s3://forex-raw/customer/",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2025-11-18T07:07:14.011Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-334935311708-us-east-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": true,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"serverEncryption": true,
+		"bookmark": "job-bookmark-enable",
+		"sparkPath": "s3://aws-glue-assets-334935311708-us-east-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"sourceControlDetails": {
+			"Provider": "GITHUB",
+			"Folder": "CustomerData-ingestion"
+		},
+		"maintenanceWindow": null
+	},
+	"hasBeenSaved": false,
+	"usageProfileName": null,
+	"script": "import sys\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom awsglue.context import GlueContext\r\nfrom pyspark.context import SparkContext\r\nfrom pyspark.sql.types import StructType, StructField, StringType, DoubleType, DateType\r\nfrom pyspark.sql.functions import col, to_date, upper\r\n\r\n# Initializing Glue & Spark\r\nargs = getResolvedOptions(sys.argv,\r\n                         ['RAW_SALES_PATH', 'PROCESSED_SALES_PATH','CURATED_SALES_PATH'])\r\nraw_sales_path = args['RAW_SALES_PATH']\r\nprocessed_sales_path = args['PROCESSED_SALES_PATH']\r\ncurated_sales_path= args['CURATED_SALES_PATH']\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\n\r\n# Defining Schema\r\nsales_schema = StructType([\r\n   StructField(\"customer_name\", StringType(), True),\r\n   StructField(\"city\", StringType(), True),\r\n   StructField(\"country\", StringType(), True),\r\n   StructField(\"local_currency_amount\", DoubleType(), True),\r\n   StructField(\"local_currency_code\", StringType(), True),\r\n   StructField(\"sale_date\",StringType(), True)\r\n])\r\n\r\n# Reading Data\r\nsales_df = spark.read.csv(raw_sales_path, schema=sales_schema, header=True)\r\n\r\n# Basic Transformations\r\nsales_df = sales_df.withColumn(\"local_currency_code\", upper(col(\"local_currency_code\")))\r\n\r\nsales_df = sales_df.withColumn(\"sale_date\", to_date(col(\"sale_date\"), \"dd-MM-yyyy\")) # date formatting\r\n\r\nfinal_df = sales_df.select(\"customer_name\", \"sale_date\", \"city\", \"country\", \"local_currency_code\", \"local_currency_amount\")\r\n\r\n# Processed layer\r\nfinal_df.write.mode(\"overwrite\").parquet(processed_sales_path)\r\n\r\n# Curated layer\r\nfinal_df.write.mode(\"overwrite\").csv(curated_sales_path, header=True)\r\n\r\n\r\n"
+}
