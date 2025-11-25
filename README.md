@@ -23,7 +23,7 @@ The **Forex Analytics Project** is an end-to-end pipeline designed to streamline
    - **Ingestion via**: AWS Lambda function.
    - **Process**:
      - Periodically fetches exchange rates.
-     - Validates schema before storing data in the `forex-processed` bucket.
+     -  Stores data in the `forex-processed` bucket.
      - Invalid records are routed to the `forex-error` bucket.
 
 2. **Customer Sales Data**:
