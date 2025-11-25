@@ -1,0 +1,16 @@
+{
+  "fileLocations": [
+    {
+      "URIs": [
+        "s3://forex-processed/transaction/curated/part-00000-005c04ec-864e-49bd-b762-d644f48d897e-c000.csv"
+      ]
+    }
+  ],
+  "globalUploadSettings": {
+    "format": "CSV",
+    "delimiter": ",",
+    "textqualifier": "\"",
+    "containsHeader": "true"
+  }
+}
+
